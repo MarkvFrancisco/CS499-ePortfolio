@@ -172,6 +172,43 @@ public class EventController {
         }
     }
 
+    // ***commenting out inefficient upcoming event checking function that uses an ArrayList***
+//    public void checkUpcomingEvents() {
+//        ArrayList<Event> events = DB.getEventsList();
+//
+//        Calendar today = Calendar.getInstance();
+//        today.set(Calendar.HOUR_OF_DAY, 0);
+//        today.set(Calendar.MINUTE, 0);
+//        today.set(Calendar.SECOND, 0);
+//        today.set(Calendar.MILLISECOND, 0);
+//
+//        for (Event event : events) {
+//            try {
+//                if (event.getDate() == null || event.getDate().isEmpty()) {
+//                    continue;
+//                }
+//
+//                Date eventDate = parseEventDate(event.getDate());
+//                if (eventDate == null) continue;
+//
+//                Calendar eventCal = Calendar.getInstance();
+//                eventCal.setTime(eventDate);
+//
+//                long diff = eventCal.getTimeInMillis() - today.getTimeInMillis();
+//                long days = TimeUnit.MILLISECONDS.toDays(diff);
+//
+//                if (days >= 0 && days <= 7 && event.getSmsSent() == 0) {
+//                    sendSmsReminder(event);
+//                    DB.markSmsSent(event.getId());
+//                }
+//
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//            }
+//        }
+//    }
+
+    //ENHANCEMENT 2: Priority Queue Algorithm
     public void checkUpcomingEvents() {
         ArrayList<Event> events = DB.getEventsList();
 
@@ -181,12 +218,30 @@ public class EventController {
         today.set(Calendar.SECOND, 0);
         today.set(Calendar.MILLISECOND, 0);
 
-        for (Event event : events) {
-            try {
-                if (event.getDate() == null || event.getDate().isEmpty()) {
-                    continue;
-                }
+        // Creating the Min Heap (PriorityQueue) to store events in chronological order
+        java.util.PriorityQueue<Event> eventMinHeap = new java.util.PriorityQueue<>(new java.util.Comparator<Event>() {
+            @Override
+            public int compare(Event e1, Event e2) {
+                Date d1 = parseEventDate(e1.getDate());
+                Date d2 = parseEventDate(e2.getDate());
+                if (d1 == null && d2 == null) return 0;
+                if (d1 == null) return 1;
+                if (d2 == null) return -1;
+                return d1.compareTo(d2); // Setting up the min heap in ascending order, earliest date at the root (min heap)
+            }
+        });
 
+        // Populate the min heap with valid events (not null and not empty) from the events ArrayList
+        for (Event event : events) {
+            if (event.getDate() != null && !event.getDate().isEmpty()) {
+                eventMinHeap.add(event);
+            }
+        }
+
+        // Processing the elements from the min heap in chronological order
+        while (!eventMinHeap.isEmpty()) {
+            Event event = eventMinHeap.poll(); // Pulls the soonest upcoming event from the heap
+            try {
                 Date eventDate = parseEventDate(event.getDate());
                 if (eventDate == null) continue;
 
@@ -195,6 +250,13 @@ public class EventController {
 
                 long diff = eventCal.getTimeInMillis() - today.getTimeInMillis();
                 long days = TimeUnit.MILLISECONDS.toDays(diff);
+
+                // Algorithmic Optimization: Since the min heap is sorted chronologically,
+                // if an event is more than 7 days away, all remaining events are also > 7 days.
+                // the function then breaks instead of iterating through the rest of the heap
+                if (days > 7) {
+                    break;
+                }
 
                 if (days >= 0 && days <= 7 && event.getSmsSent() == 0) {
                     sendSmsReminder(event);
